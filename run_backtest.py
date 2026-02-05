@@ -115,7 +115,6 @@ def run_quick_backtest(
         start_date=start_date,
         end_date=end_date,
         commission_rate=0.0003,
-        slippage_base=0.0001,
     )
     
     # 执行回测

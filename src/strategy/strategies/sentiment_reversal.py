@@ -44,8 +44,26 @@ class SentimentReversalStrategy(BaseStrategy):
     
     def compute_factors(self, history: Dict[str, pd.DataFrame]):
         """计算因子"""
-        engine = AlphaFactorEngine.from_dataframe_dict(history)
-        return engine.compute()
+        high, low, close, open_arr, volume, codes, dates = (
+            AlphaFactorEngine.from_dataframe_dict(history)
+        )
+        engine = AlphaFactorEngine()
+        factors, code_to_idx, date_to_idx = engine.compute(
+            high,
+            low,
+            close,
+            open_arr,
+            volume,
+            codes,
+            dates,
+            rsrs_window=18,
+            zscore_window=600,
+        )
+        factors["__code_to_idx__"] = code_to_idx
+        factors["__date_to_idx__"] = date_to_idx
+        factor_count = len([name for name in factors.keys() if not name.startswith("__")])
+        self.logger.info(f"✓ 因子计算完成: {factor_count} 个因子")
+        return factors
     
     def _generate_entry_signals(self, context: StrategyContext) -> List[Signal]:
         """捕捉超卖"""
