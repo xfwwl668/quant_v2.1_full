@@ -116,11 +116,15 @@ class RSRSMomentumStrategy(BaseStrategy):
                 zscore_window=600
             )
 
+            factors["__code_to_idx__"] = code_to_idx
+            factors["__date_to_idx__"] = date_to_idx
+
             n_stocks = len(codes)
             n_days = len(dates)
+            factor_count = len([name for name in factors.keys() if not name.startswith("__")])
 
             self.logger.info(
-                f"✓ 因子计算完成: {len(factors)} 个因子 × "
+                f"✓ 因子计算完成: {factor_count} 个因子 × "
                 f"{n_stocks} 股票 × {n_days} 天"
             )
 
