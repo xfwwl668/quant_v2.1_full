@@ -1,0 +1,28 @@
+# requirements.txt
+# =================
+# 高性能量化回测系统 v2.0.1 依赖清单
+
+# 核心依赖
+numpy>=1.23.0
+pandas>=1.5.0
+numba>=0.56.0          # Numba 加速（rsrs.py）
+
+# 数据源
+pytdx>=1.72            # TDX 数据接口
+
+# 数据存储
+pyarrow>=10.0.0        # Parquet 支持
+
+# 配置管理
+pyyaml>=6.0            # YAML 配置文件
+
+# 可选依赖（性能优化）
+# pandas_market_calendars  # 交易日历（推荐生产环境）
+# tushare                  # 备用数据源
+# akshare                  # 备用数据源
+
+# 开发依赖
+# pytest>=7.0.0           # 单元测试
+# pytest-cov>=4.0.0       # 测试覆盖率
+# black>=22.0.0           # 代码格式化
+# mypy>=0.990             # 类型检查

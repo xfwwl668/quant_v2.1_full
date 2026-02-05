@@ -1,0 +1,29 @@
+v2.1.0-full-fix2
+
+完整策略版（紧急修复2）
+发布: 2026-02-05
+状态: 生产就绪 ✅
+
+## 本次修复
+1. HybridExecutionEngine参数错误
+2. 裸except修复（6处）
+3. 配置验证器集成
+4. 并发安全审计
+
+## 策略
+6个生产级策略:
+- RSRSMomentumStrategy (基础)
+- RSRSAdvancedStrategy (高级)
+- AlphaHunterStrategy (高频)
+- ShortTermStrategy (短线)
+- MomentumReversalStrategy (组合)
+- SentimentReversalStrategy (反转)
+
+## 健康检查
+✅ 策略导入
+✅ 裸except
+✅ 配置验证
+✅ 引擎参数
+✅ 并发安全
+
+运行: python health_check.py
