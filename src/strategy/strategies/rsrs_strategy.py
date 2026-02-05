@@ -86,37 +86,46 @@ class RSRSMomentumStrategy(BaseStrategy):
     def compute_factors(self, history: Dict[str, pd.DataFrame]) -> FactorStore:
         """
         计算 RSRS 因子（契约方法）。
-        
+
         Args:
             history: {code: DataFrame} 历史数据
-        
+
         Returns:
             FactorStore: {factor_name: pd.Series}
-        
+
         契约：
             - 必须返回 Dict[str, pd.Series]
             - Series.index 必须是日期（datetime64）
             - Series.values 必须是 float64
         """
         from ...factors.alpha_engine import AlphaFactorEngine
-        
+
         # 使用 AlphaFactorEngine 计算因子
         try:
-            engine = AlphaFactorEngine.from_dataframe_dict(
-                history,
+            # Step 1: 转换数据为矩阵格式（静态方法，不接受窗口参数）
+            high, low, close, open_arr, volume, codes, dates = \
+                AlphaFactorEngine.from_dataframe_dict(history)
+
+            # Step 2: 创建引擎实例
+            engine = AlphaFactorEngine()
+
+            # Step 3: 计算因子（在此处指定窗口参数）
+            factors, code_to_idx, date_to_idx = engine.compute(
+                high, low, close, open_arr, volume, codes, dates,
                 rsrs_window=18,
                 zscore_window=600
             )
-            
-            factors = engine.compute()
-            
+
+            n_stocks = len(codes)
+            n_days = len(dates)
+
             self.logger.info(
                 f"✓ 因子计算完成: {len(factors)} 个因子 × "
-                f"{engine.n_stocks} 股票 × {engine.n_days} 天"
+                f"{n_stocks} 股票 × {n_days} 天"
             )
-            
+
             return factors
-        
+
         except Exception as e:
             self.logger.error(f"因子计算失败: {e}")
             raise

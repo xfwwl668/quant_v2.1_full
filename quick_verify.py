@@ -116,7 +116,7 @@ def main():
     const_fix = check_fix_markers("src/constants.py", const_markers)
     
     # 额外检查：不应包含market_data
-    with open("src/constants.py", 'r') as f:
+    with open("src/constants.py", 'r', encoding='utf-8') as f:
         const_content = f.read()
     if "market_data/parquet" in const_content.lower():
         print("  ⚠ constants.py: 仍然包含错误的market_data路径")

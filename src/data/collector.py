@@ -840,7 +840,7 @@ class TdxParallelDownloader:
         self,
         stock_list: Optional[List[Tuple[int, str]]] = None,
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
-        batch_log_size: int = 100
+        batch_log_size: int = 50
     ) -> Dict[str, Any]:
         """
         并行下载全市场股票。
@@ -930,7 +930,7 @@ class TdxParallelDownloader:
                             elapsed = (datetime.now() - self._stats['start_time']).total_seconds()
                             speed = completed / elapsed if elapsed > 0 else 0
                             eta = (total - completed) / speed if speed > 0 else 0
-                            
+
                             self.logger.info(
                                 f"📊 进度: {completed}/{total} ({completed/total*100:.1f}%) | "
                                 f"成功: {self._stats['success']} | "
@@ -939,6 +939,7 @@ class TdxParallelDownloader:
                                 f"速度: {speed:.1f}/s | "
                                 f"剩余: {eta:.0f}s"
                             )
+                            sys.stdout.flush()
                 
                 except Exception as e:
                     self.logger.error(f"Worker-{worker_id} 异常: {e}")
