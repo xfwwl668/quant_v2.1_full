@@ -494,6 +494,9 @@ class HybridExecutionEngine:
             for code, pos in self.account._positions.items()
         }
         
+        # 股票池列表
+        universe = list(self._history_data.keys()) if self._history_data else []
+        
         # 历史数据提供者（闭包）
         def history_provider(code: str, lookback: int = 250) -> pd.DataFrame:
             if self._history_data and code in self._history_data:
@@ -519,6 +522,7 @@ class HybridExecutionEngine:
             history_provider=history_provider,
             factor_provider=factor_provider,
             factor_accessor=self._factor_accessor,
+            universe=universe,
         )
         
         return context
