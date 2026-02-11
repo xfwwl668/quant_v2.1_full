@@ -982,6 +982,7 @@ class StrategyContext:
         "positions",          # {code: quantity}  引擎维护的持仓快照
         "total_equity",
         "cash",
+        "universe",           # List[str] 股票池列表
         # 闭包提供者（引擎注入，策略不可见）
         "_history_provider",
         "_factor_provider",
@@ -1000,6 +1001,7 @@ class StrategyContext:
         history_provider: Optional[Callable[[str, int], pd.DataFrame]] = None,
         factor_provider: Optional[Callable[[str, str], Optional[float]]] = None,
         factor_accessor: Optional[FactorAccessor] = None,
+        universe: Optional[List[str]] = None,
     ) -> None:
         self.current_date = current_date
         self.current_timestamp = current_timestamp
@@ -1007,6 +1009,7 @@ class StrategyContext:
         self.positions = positions
         self.total_equity = total_equity
         self.cash = cash
+        self.universe = universe if universe is not None else []
         self._history_provider = history_provider
         self._factor_provider = factor_provider
         self.factor_accessor = factor_accessor

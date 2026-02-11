@@ -397,8 +397,8 @@ def compute_rsrs_batch(
                 x_norm[t] = np.nan
                 y_norm[t] = np.nan
             else:
-                low_mean = np.mean(low_i[max(0, t - window + 1) : t + 1])
-                high_mean = np.mean(high_i[max(0, t - window + 1) : t + 1])
+                low_mean = np.nanmean(low_i[max(0, t - window + 1) : t + 1])
+                high_mean = np.nanmean(high_i[max(0, t - window + 1) : t + 1])
                 if low_mean > 1e-9 and high_mean > 1e-9:
                     x_norm[t] = low_i[t] / low_mean
                     y_norm[t] = high_i[t] / high_mean
