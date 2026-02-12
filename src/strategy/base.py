@@ -399,24 +399,15 @@ class BaseStrategy(ABC):
         应覆盖此方法，在 BUY 分支中构造对应子类实例并调用 register_position()。
         """
         if order.side == OrderSide.BUY:
-            # 默认注册为 BasePositionState
-            from .types import BasePositionState
-            stop_loss_rate = self.get_param("stop_loss", -0.08)
-            take_profit_rate = self.get_param("take_profit", 0.15)
+            # 使用策略钩子创建持仓
+            position = self.create_position_from_fill(order)
 
-            pos = BasePositionState(
-                code=order.code,
-                entry_price=order.filled_price,
-                entry_date=order.create_date,
-                quantity=order.filled_quantity,
-                stop_loss_price=order.filled_price * (1.0 + stop_loss_rate),  # stop_loss 为负值
-                take_profit_price=order.filled_price * (1.0 + take_profit_rate),
-            )
-            self.register_position(pos)
-            self.logger.info(
-                f"[BUY FILLED] {order.code} @ {order.filled_price:.2f} "
-                f"qty={order.filled_quantity} | SL={pos.stop_loss_price:.2f} TP={pos.take_profit_price:.2f}"
-            )
+            if position is not None:
+                self.register_position(position)
+                self.logger.info(
+                    f"[BUY FILLED] {order.code} @ {order.filled_price:.2f} "
+                    f"qty={order.filled_quantity} | SL={position.stop_loss_price:.2f} TP={position.take_profit_price:.2f}"
+                )
 
         elif order.side == OrderSide.SELL:
             old_pos = self.unregister_position(order.code)
@@ -439,6 +430,33 @@ class BaseStrategy(ABC):
                 )
             else:
                 self.logger.warning(f"[SELL FILLED] {order.code} — 无对应持仓记录")
+
+    def create_position_from_fill(self, order: Order) -> Optional[PositionStateProtocol]:
+        """
+        从成交单创建持仓状态（子类可覆盖）。
+
+        默认实现使用 BasePositionState。
+        子策略可以覆盖此方法以创建自定义 PositionState 子类。
+
+        Args:
+            order: 成交订单（BUY 方向）
+
+        Returns:
+            持仓状态对象，或 None 表示不创建持仓
+        """
+        from .types import BasePositionState
+
+        stop_loss_rate = self.get_param("stop_loss", -0.08)
+        take_profit_rate = self.get_param("take_profit", 0.15)
+
+        return BasePositionState(
+            code=order.code,
+            entry_price=order.filled_price,
+            entry_date=order.create_date,
+            quantity=order.filled_quantity,
+            stop_loss_price=order.filled_price * (1.0 + stop_loss_rate),  # stop_loss 为负值
+            take_profit_price=order.filled_price * (1.0 + take_profit_rate),
+        )
 
     def on_order_rejected(self, order: Order, reason: str) -> None:
         """订单拒绝回调"""

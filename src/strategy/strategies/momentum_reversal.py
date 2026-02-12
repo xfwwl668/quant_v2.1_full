@@ -98,11 +98,11 @@ class MomentumReversalStrategy(BaseStrategy):
         if momentum_selected:
             weight = 0.6 / len(momentum_selected)
             for code, score in momentum_selected:
-                if code not in context.get_positions():
+                if code not in context.positions:
                     self._position_modes[code] = "momentum"
                     signals.append(Signal(
                         code=code,
-                        direction=OrderSide.BUY,
+                        side=OrderSide.BUY,
                         weight=weight,
                         reason=f"动量{score:.2f}",
                     ))
@@ -114,11 +114,11 @@ class MomentumReversalStrategy(BaseStrategy):
         if reversal_selected:
             weight = 0.4 / len(reversal_selected)
             for code, score in reversal_selected:
-                if code not in context.get_positions():
+                if code not in context.positions:
                     self._position_modes[code] = "reversal"
                     signals.append(Signal(
                         code=code,
-                        direction=OrderSide.BUY,
+                        side=OrderSide.BUY,
                         weight=weight,
                         reason=f"反转{score:.2f}",
                     ))
@@ -128,25 +128,31 @@ class MomentumReversalStrategy(BaseStrategy):
     def _generate_exit_signals(self, context: StrategyContext) -> List[Signal]:
         """双模式离场"""
         signals = []
-        
+
         rsrs = context.get_factor("rsrs_adaptive")
-        current_prices = context.get_current_prices()
-        
-        for code, pos in context.get_positions().items():
+
+        current_prices = {}
+        if not context.current_data.empty and "code" in context.current_data.columns:
+            current_prices = dict(zip(
+                context.current_data["code"],
+                context.current_data["close"]
+            ))
+
+        for code, pos in context.positions.items():
             price = current_prices.get(code)
             if not price:
                 continue
-            
+
             mode = self._position_modes.get(code, "momentum")
             rsrs_val = rsrs.get(code) if rsrs else 0
             pnl = (price - pos.entry_price) / pos.entry_price
-            
+
             if mode == "momentum":
                 # 动量止损
                 if rsrs_val < 0.3 or pnl < -0.04:
                     signals.append(Signal(
                         code=code,
-                        direction=OrderSide.SELL,
+                        side=OrderSide.SELL,
                         weight=0.0,
                         reason=f"动量失效{rsrs_val:.2f}",
                     ))
@@ -155,14 +161,14 @@ class MomentumReversalStrategy(BaseStrategy):
                 if rsrs_val > 0.5 or pnl > 0.08:
                     signals.append(Signal(
                         code=code,
-                        direction=OrderSide.SELL,
+                        side=OrderSide.SELL,
                         weight=0.0,
                         reason=f"反转完成{pnl*100:.1f}%",
                     ))
                 elif pnl < -0.06:
                     signals.append(Signal(
                         code=code,
-                        direction=OrderSide.SELL,
+                        side=OrderSide.SELL,
                         weight=0.0,
                         reason=f"反转失败{pnl*100:.1f}%",
                     ))
