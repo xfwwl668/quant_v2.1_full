@@ -148,90 +148,20 @@ def _online_ols_single(
     
     # 需要至少80%有效数据
     min_valid = int(window * 0.8)
-    if valid_count < min_valid:
-        # 有效数据不足，跳过后续计算
-        # beta/r2/resid保持NaN
-        return beta, r2, resid
-    
-    # 计算第一个回归结果（idx = window - 1）
-    # ✅ FIX: 使用实际有效数据数量
-    w_float = float(valid_count)
-    denom = w_float * S_xx - S_x * S_x
-    
-    if abs(denom) > 1e-12:
-        b = (w_float * S_xy - S_x * S_y) / denom
-        # a = (S_y - b * S_x) / w_float  # α 在 RSRS 中不需要
-        
-        # r²
-        numer = (w_float * S_xy - S_x * S_y) ** 2
-        denom_r2 = (w_float * S_xx - S_x * S_x) * (w_float * S_yy - S_y * S_y)
-        if denom_r2 > 1e-12:
-            r2_val = numer / denom_r2
-        else:
-            r2_val = 0.0
-        
-        # 残差方差（用于计算 std）
-        # 残差 = y - (α + β·x)
-        # 这里简化：std ≈ sqrt(1 - r²) * std(y)
-        # 或更精确地用 SSE / (n - 2)
-        # 简化版：resid_std = sqrt((S_yy - b * S_xy) / w)
-        sse = S_yy - b * S_xy  # 简化 SSE
-        if sse > 0 and valid_count > 2:
-            resid_std = np.sqrt(sse / (valid_count - 2))
-        else:
-            resid_std = 0.0
-        
-        beta[window - 1] = b
-        r2[window - 1] = r2_val
-        resid[window - 1] = resid_std
-    
-    # 滚动窗口：从 idx=window 到 n-1
-    for t in range(window, n):
-        # 移除窗口左端点 (t - window)
-        x_old = x[t - window]
-        y_old = y[t - window]
-        
-        # 加入窗口右端点 (t)
-        x_new = x[t]
-        y_new = y[t]
-        
-        # ✅ FIX: 改进NaN处理逻辑
-        old_is_valid = not (np.isnan(x_old) or np.isnan(y_old))
-        new_is_valid = not (np.isnan(x_new) or np.isnan(y_new))
-        
-        # 更新有效数据计数
-        if old_is_valid and not new_is_valid:
-            valid_count -= 1  # 移出有效，加入无效
-        elif not old_is_valid and new_is_valid:
-            valid_count += 1  # 移出无效，加入有效
-        # 其他情况：都有效或都无效，计数不变
-        
-        # 检查有效数据是否足够
-        if valid_count < min_valid:
-            # 有效数据不足，跳过此窗口（保持NaN）
-            continue
-        
-        # 增量更新滚动和（仅当数据有效时）
-        if old_is_valid:
-            S_x -= x_old
-            S_y -= y_old
-            S_xx -= x_old * x_old
-            S_yy -= y_old * y_old
-            S_xy -= x_old * y_old
-        
-        if new_is_valid:
-            S_x += x_new
-            S_y += y_new
-            S_xx += x_new * x_new
-            S_yy += y_new * y_new
-            S_xy += x_new * y_new
-        
-        # 计算回归系数（使用实际有效数据数量）
+
+    # ✅ FIX: 标记第一个窗口是否有效
+    first_window_valid = valid_count >= min_valid
+
+    # 如果第一个窗口无效，不计算beta[window-1]，保持统计量不变（用于后续增量更新）
+    # 只有当第一个窗口有效时，才计算beta[window-1]
+    if first_window_valid:
         w_float = float(valid_count)
         denom = w_float * S_xx - S_x * S_x
+
         if abs(denom) > 1e-12:
             b = (w_float * S_xy - S_x * S_y) / denom
-            
+            # a = (S_y - b * S_x) / w_float  # α 在 RSRS 中不需要
+
             # r²
             numer = (w_float * S_xy - S_x * S_y) ** 2
             denom_r2 = (w_float * S_xx - S_x * S_x) * (w_float * S_yy - S_y * S_y)
@@ -239,14 +169,124 @@ def _online_ols_single(
                 r2_val = numer / denom_r2
             else:
                 r2_val = 0.0
-            
+
+            # 残差方差（用于计算 std）
+            # 残差 = y - (α + β·x)
+            # 这里简化：std ≈ sqrt(1 - r²) * std(y)
+            # 或更精确地用 SSE / (n - 2)
+            # 简化版：resid_std = sqrt((S_yy - b * S_xy) / w)
+            sse = S_yy - b * S_xy  # 简化 SSE
+            if sse > 0 and valid_count > 2:
+                resid_std = np.sqrt(sse / (valid_count - 2))
+            else:
+                resid_std = 0.0
+
+            beta[window - 1] = b
+            r2[window - 1] = r2_val
+            resid[window - 1] = resid_std
+    else:
+        # ✅ FIX: 第一个窗口无效时，重置统计量，等待后续窗口
+        # 这样滑动窗口增量更新才能正常工作
+        S_x = S_y = S_xx = S_yy = S_xy = 0.0
+        valid_count = 0
+    
+    # 滚动窗口：从 idx=window 到 n-1
+    for t in range(window, n):
+        # 移除窗口左端点 (t - window)
+        x_old = x[t - window]
+        y_old = y[t - window]
+
+        # 加入窗口右端点 (t)
+        x_new = x[t]
+        y_new = y[t]
+
+        # ✅ FIX: 改进NaN处理逻辑
+        old_is_valid = not (np.isnan(x_old) or np.isnan(y_old))
+        new_is_valid = not (np.isnan(x_new) or np.isnan(y_new))
+
+        # ✅ FIX: 如果第一个窗口无效（统计量被重置），则需要重新计算窗口统计量
+        if not first_window_valid and valid_count == 0:
+            # 重新计算当前窗口 [t-window+1, t+1] 的统计量
+            window_S_x = 0.0
+            window_S_y = 0.0
+            window_S_xx = 0.0
+            window_S_yy = 0.0
+            window_S_xy = 0.0
+            window_valid_count = 0
+
+            for i in range(t - window + 1, t + 1):
+                xi = x[i]
+                yi = y[i]
+                if not (np.isnan(xi) or np.isnan(yi)):
+                    window_S_x += xi
+                    window_S_y += yi
+                    window_S_xx += xi * xi
+                    window_S_yy += yi * yi
+                    window_S_xy += xi * yi
+                    window_valid_count += 1
+
+            # 检查是否有足够有效数据
+            if window_valid_count >= min_valid:
+                # 使用重新计算的统计量
+                S_x = window_S_x
+                S_y = window_S_y
+                S_xx = window_S_xx
+                S_yy = window_S_yy
+                S_xy = window_S_xy
+                valid_count = window_valid_count
+            else:
+                # 仍然不足，跳过
+                continue
+        else:
+            # 正常的增量更新
+            # 更新有效数据计数
+            if old_is_valid and not new_is_valid:
+                valid_count -= 1  # 移出有效，加入无效
+            elif not old_is_valid and new_is_valid:
+                valid_count += 1  # 移出无效，加入有效
+            # 其他情况：都有效或都无效，计数不变
+
+            # 检查有效数据是否足够
+            if valid_count < min_valid:
+                # 有效数据不足，跳过此窗口（保持NaN）
+                continue
+
+            # 增量更新滚动和（仅当数据有效时）
+            if old_is_valid:
+                S_x -= x_old
+                S_y -= y_old
+                S_xx -= x_old * x_old
+                S_yy -= y_old * y_old
+                S_xy -= x_old * y_old
+
+            if new_is_valid:
+                S_x += x_new
+                S_y += y_new
+                S_xx += x_new * x_new
+                S_yy += y_new * y_new
+                S_xy += x_new * y_new
+
+        # 计算回归系数（使用实际有效数据数量）
+        w_float = float(valid_count)
+        denom = w_float * S_xx - S_x * S_x
+        if abs(denom) > 1e-12:
+            b = (w_float * S_xy - S_x * S_y) / denom
+
+            # r²
+            numer = (w_float * S_xy - S_x * S_y) ** 2
+            denom_r2 = (w_float * S_xx - S_x * S_x) * (w_float * S_yy - S_y * S_y)
+            if denom_r2 > 1e-12:
+                r2_val = numer / denom_r2
+            else:
+                r2_val = 0.0
+
             # 残差标准差
             sse = S_yy - b * S_xy
             if sse > 0 and valid_count > 2:
                 resid_std = np.sqrt(sse / (valid_count - 2))
             else:
                 resid_std = 0.0
-            
+
             beta[t] = b
             r2[t] = r2_val
             resid[t] = resid_std
@@ -388,15 +428,20 @@ def compute_rsrs_batch(
         high_i = high[i, :]
         low_i = low[i, :]
         
-        # 归一化（用前 window 均值）
+        # 归一化（用滑动窗口均值）
+        # ✅ FIX: 使用 np.nanmean 忽略 NaN 值，从 t=window-1 开始计算
+        # 这样回归窗口 [window-1, 2*window-1) 将有 window 个有效数据点
         x_norm = np.empty(n_days, dtype=np.float64)
         y_norm = np.empty(n_days, dtype=np.float64)
-        
+
         for t in range(n_days):
             if t < window - 1:
+                # 前 window-1 天设为 NaN
                 x_norm[t] = np.nan
                 y_norm[t] = np.nan
             else:
+                # ✅ FIX: 使用 np.nanmean 忽略 NaN 值
+                # 计算窗口内的均值，窗口包含当前值
                 low_mean = np.nanmean(low_i[max(0, t - window + 1) : t + 1])
                 high_mean = np.nanmean(high_i[max(0, t - window + 1) : t + 1])
                 if low_mean > 1e-9 and high_mean > 1e-9:
@@ -421,16 +466,18 @@ def compute_rsrs_batch(
                 rsrs_momentum[i, t] = (beta_i[t] - beta_i[t - momentum_window]) / momentum_window
         
         # ── Step 4: Z-Score 标准化 β ──
-        beta_mean, beta_std_arr = _welford_rolling_mean_std(beta_i, zscore_window)
-        
+        # ✅ FIX: 如果 zscore_window > n_days，使用 n_days 作为窗口大小
+        actual_zscore_window = min(zscore_window, n_days)
+        beta_mean, beta_std_arr = _welford_rolling_mean_std(beta_i, actual_zscore_window)
+
         # ── Step 5: 自适应 RSRS ──
         # adaptive = zscore(β) × r² × sign(momentum)
         for t in range(n_days):
             if (not np.isnan(beta_i[t]) and
                 not np.isnan(beta_mean[t]) and
                 not np.isnan(beta_std_arr[t]) and
-                beta_std_arr[t] > 1e-9):
-                
+                beta_std_arr[t] > 1e-12):  # ✅ FIX: 降低阈值，允许更小的标准差
+
                 zscore = (beta_i[t] - beta_mean[t]) / beta_std_arr[t]
                 r2_val = r2_i[t] if not np.isnan(r2_i[t]) else 0.0
                 momentum_val = rsrs_momentum[i, t] if not np.isnan(rsrs_momentum[i, t]) else 0.0
