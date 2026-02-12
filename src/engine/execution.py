@@ -116,6 +116,10 @@ from strategy.types import (
     BasePositionState,
     FactorAccessor,
     FactorStore,
+    Order,
+    OrderSide,
+    OrderStatus,
+    OrderType,
     Signal,
     StrategyContext,
     Timestamp,
@@ -353,7 +357,8 @@ class HybridExecutionEngine:
         
         # ── Step 2: 更新 FactorAccessor 的当前日期索引 ──
         if self._factor_accessor:
-            self._factor_accessor._current_date_idx = self._date_to_idx[date]
+            if not self._factor_accessor.update_date_idx(date):
+                self.logger.debug(f"Date {date} not in factor index")
         
         # ── Step 3: 构建 StrategyContext ──
         context = self._build_context(date, current_data)
@@ -382,22 +387,41 @@ class HybridExecutionEngine:
         
         # ── Step 8: 处理成交 ──
         for fill in fills:
-            # 创建持仓状态（简化版：使用 BasePositionState）
-            # 实际使用中应该由策略创建具体的 PositionState 子类
-            position = BasePositionState(
-                code=fill.code,
-                entry_price=fill.price,
-                entry_date=date,
-                quantity=fill.quantity,
-            )
-            
+            # 创建持仓状态（使用策略钩子）
+            position = None
+            if fill.side == OrderSide.BUY:
+                # BUY: 需要创建持仓，使用策略钩子
+                # 转换 Fill 为 Order（临时对象）
+                temp_order = Order(
+                    order_id=fill.order_id,
+                    code=fill.code,
+                    side=fill.side,
+                    order_type=OrderType.MARKET,
+                    quantity=fill.quantity,
+                    price=fill.price,
+                    filled_quantity=fill.quantity,
+                    filled_price=fill.price,
+                    commission=fill.commission,
+                    slippage=fill.slippage,
+                    create_time=fill.timestamp,
+                    create_date=date,
+                    submit_time=fill.timestamp,
+                    fill_time=fill.timestamp,
+                    status=OrderStatus.FILLED,
+                    strategy_name=fill.strategy_name,
+                    signal_reason="",
+                )
+                position = self.strategy.create_position_from_fill(temp_order)
+
             # 处理成交
             success = self.account.process_fill(fill, position)
-            
+
             if success:
-                # 调用策略回调
+                # 调用策略回调（用于日志和自定义逻辑）
                 self.strategy.on_order_filled(fill)
-        
+            else:
+                self.logger.error(f"Failed to process fill for {fill.code}")
+
         # ── Step 9: 处理拒绝订单 ──
         for order in rejects:
             self.strategy.on_order_rejected(order, order.reject_reason)

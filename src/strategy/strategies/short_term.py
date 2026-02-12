@@ -91,11 +91,11 @@ class ShortTermStrategy(BaseStrategy):
         weight = 1.0 / len(selected) if selected else 0
         
         for code, score in selected:
-            if code not in context.get_positions():
+            if code not in context.positions:
                 self._entry_dates[code] = context.current_date
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.BUY,
+                    side=OrderSide.BUY,
                     weight=weight,
                     reason=f"短线入场{score:.2f}",
                 ))
@@ -105,38 +105,44 @@ class ShortTermStrategy(BaseStrategy):
     def _generate_exit_signals(self, context: StrategyContext) -> List[Signal]:
         """多重止损"""
         signals = []
-        
+
         rsrs = context.get_factor("rsrs_adaptive")
-        current_prices = context.get_current_prices()
-        
-        for code, pos in context.get_positions().items():
+
+        current_prices = {}
+        if not context.current_data.empty and "code" in context.current_data.columns:
+            current_prices = dict(zip(
+                context.current_data["code"],
+                context.current_data["close"]
+            ))
+
+        for code, pos in context.positions.items():
             price = current_prices.get(code)
             if not price:
                 continue
-            
+
             pnl = (price - pos.entry_price) / pos.entry_price
             rsrs_val = rsrs.get(code) if rsrs else 0
-            
+
             # 止损1: 固定止损
             if pnl < self.stop_loss:
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.SELL,
+                    side=OrderSide.SELL,
                     weight=0.0,
                     reason=f"止损{pnl*100:.1f}%",
                 ))
                 continue
-            
+
             # 止损2: RSRS转弱
             if rsrs_val < self.rsrs_exit:
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.SELL,
+                    side=OrderSide.SELL,
                     weight=0.0,
                     reason=f"RSRS转弱{rsrs_val:.2f}",
                 ))
                 continue
-            
+
             # 止损3: 时间止损
             entry_date = self._entry_dates.get(code)
             if entry_date:
@@ -144,7 +150,7 @@ class ShortTermStrategy(BaseStrategy):
                 if days >= self.max_holding_days and pnl < 0:
                     signals.append(Signal(
                         code=code,
-                        direction=OrderSide.SELL,
+                        side=OrderSide.SELL,
                         weight=0.0,
                         reason=f"时间止损{days}天",
                     ))

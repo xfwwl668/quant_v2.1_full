@@ -953,6 +953,22 @@ class FactorAccessor:
         """返回当前 store 中所有因子名"""
         return list(self._store.keys())
 
+    def update_date_idx(self, date: str) -> bool:
+        """
+        更新当前日期索引。
+
+        Args:
+            date: 日期字符串
+
+        Returns:
+            True 表示更新成功，False 表示日期不在映射中
+        """
+        idx = self._date_to_idx.get(date)
+        if idx is not None:
+            self._current_date_idx = idx
+            return True
+        return False
+
     def __repr__(self) -> str:
         return f"FactorAccessor(factors={self.factor_names()}, codes={len(self._code_to_idx)})"
 

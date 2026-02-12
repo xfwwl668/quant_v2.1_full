@@ -200,7 +200,7 @@ class RSRSMomentumStrategy(BaseStrategy):
         for code, score in sorted_stocks:
             signals.append(Signal(
                 code=code,
-                direction=OrderSide.BUY,
+                side=OrderSide.BUY,
                 weight=target_weight,
                 reason=f"RSRS={score:.2f}",
                 timestamp=Timestamp.from_str(current_date)
@@ -229,12 +229,17 @@ class RSRSMomentumStrategy(BaseStrategy):
         signals: List[Signal] = []
         
         # 获取当前持仓
-        positions = context.get_positions()
+        positions = context.positions
         if not positions:
             return signals
-        
+
         # 获取当前价格
-        current_prices = context.get_current_prices()
+        current_prices = {}
+        if not context.current_data.empty and "code" in context.current_data.columns:
+            current_prices = dict(zip(
+                context.current_data["code"],
+                context.current_data["close"]
+            ))
         
         # 获取 RSRS 因子
         rsrs_adaptive = context.get_factor("rsrs_adaptive")
@@ -252,7 +257,7 @@ class RSRSMomentumStrategy(BaseStrategy):
                 if pnl_pct <= self.stop_loss_pct:
                     signals.append(Signal(
                         code=code,
-                        direction=OrderSide.SELL,
+                        side=OrderSide.SELL,
                         weight=0.0,
                         reason=f"止损: {pnl_pct*100:.1f}%",
                         timestamp=Timestamp.from_str(context.current_date)
@@ -265,7 +270,7 @@ class RSRSMomentumStrategy(BaseStrategy):
                 if valid is not None and valid < 0.5:
                     signals.append(Signal(
                         code=code,
-                        direction=OrderSide.SELL,
+                        side=OrderSide.SELL,
                         weight=0.0,
                         reason="RSRS 失效",
                         timestamp=Timestamp.from_str(context.current_date)
@@ -298,7 +303,7 @@ class RSRSMomentumStrategy(BaseStrategy):
                     if code not in top_codes:
                         signals.append(Signal(
                             code=code,
-                            direction=OrderSide.SELL,
+                            side=OrderSide.SELL,
                             weight=0.0,
                             reason=f"退出 Top-{self.top_n}",
                             timestamp=Timestamp.from_str(context.current_date)

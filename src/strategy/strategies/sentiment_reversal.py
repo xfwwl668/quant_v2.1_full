@@ -91,10 +91,10 @@ class SentimentReversalStrategy(BaseStrategy):
         weight = 1.0 / len(selected) if selected else 0
         
         for code, rsrs_val in selected:
-            if code not in context.get_positions():
+            if code not in context.positions:
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.BUY,
+                    side=OrderSide.BUY,
                     weight=weight,
                     reason=f"超卖{rsrs_val:.2f}",
                 ))
@@ -104,30 +104,36 @@ class SentimentReversalStrategy(BaseStrategy):
     def _generate_exit_signals(self, context: StrategyContext) -> List[Signal]:
         """反转完成或止损"""
         signals = []
-        
+
         rsrs = context.get_factor("rsrs_adaptive")
-        current_prices = context.get_current_prices()
-        
-        for code, pos in context.get_positions().items():
+
+        current_prices = {}
+        if not context.current_data.empty and "code" in context.current_data.columns:
+            current_prices = dict(zip(
+                context.current_data["code"],
+                context.current_data["close"]
+            ))
+
+        for code, pos in context.positions.items():
             price = current_prices.get(code)
             if not price:
                 continue
-            
+
             rsrs_val = rsrs.get(code) if rsrs else 0
             pnl = (price - pos.entry_price) / pos.entry_price
-            
+
             # 止盈
             if pnl > self.target_profit:
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.SELL,
+                    side=OrderSide.SELL,
                     weight=0.0,
                     reason=f"目标{pnl*100:.1f}%",
                 ))
             elif rsrs_val > self.exit_threshold:
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.SELL,
+                    side=OrderSide.SELL,
                     weight=0.0,
                     reason=f"反转完成{rsrs_val:.2f}",
                 ))
@@ -135,7 +141,7 @@ class SentimentReversalStrategy(BaseStrategy):
             elif pnl < self.max_stop_loss:
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.SELL,
+                    side=OrderSide.SELL,
                     weight=0.0,
                     reason=f"止损{pnl*100:.1f}%",
                 ))

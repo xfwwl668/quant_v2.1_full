@@ -122,8 +122,12 @@ class AlphaHunterStrategy(BaseStrategy):
         weight = 1.0 / len(selected) if selected else 0
         
         for code, rsrs_val in selected:
-            if code not in context.get_positions():
-                price = context.get_current_prices().get(code, 0)
+            if code not in context.positions:
+                price = 0.0
+                if not context.current_data.empty:
+                    row = context.current_data[context.current_data["code"] == code]
+                    if not row.empty:
+                        price = row["close"].iloc[0]
                 
                 # 创建增强持仓记录
                 self._positions[code] = EnhancedPosition(
@@ -138,7 +142,7 @@ class AlphaHunterStrategy(BaseStrategy):
                 
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.BUY,
+                    side=OrderSide.BUY,
                     weight=weight,
                     reason=f"AlphaHunter RSRS={rsrs_val:.2f}",
                 ))
@@ -148,13 +152,18 @@ class AlphaHunterStrategy(BaseStrategy):
     def _generate_exit_signals(self, context: StrategyContext) -> List[Signal]:
         """多层止损"""
         signals = []
-        
-        current_prices = context.get_current_prices()
-        
+
+        current_prices = {}
+        if not context.current_data.empty and "code" in context.current_data.columns:
+            current_prices = dict(zip(
+                context.current_data["code"],
+                context.current_data["close"]
+            ))
+
         for code, pos_state in list(self._positions.items()):
-            if code not in context.get_positions():
+            if code not in context.positions:
                 continue
-            
+
             price = current_prices.get(code)
             if not price:
                 continue
@@ -168,18 +177,18 @@ class AlphaHunterStrategy(BaseStrategy):
             if pnl < self.hard_stop:
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.SELL,
+                    side=OrderSide.SELL,
                     weight=0.0,
                     reason=f"硬止损{pnl*100:.1f}%",
                 ))
                 del self._positions[code]
                 continue
-            
+
             # 移动止损
             if price < pos_state.trailing_stop:
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.SELL,
+                    side=OrderSide.SELL,
                     weight=0.0,
                     reason=f"锁利{pnl*100:.1f}% L{pos_state.lock_level}",
                 ))

@@ -98,50 +98,61 @@ class RSRSAdvancedStrategy(BaseStrategy):
         weight = 1.0 / len(selected) if selected else 0
         
         for code, rsrs_val in selected:
-            if code not in context.get_positions():
+            if code not in context.positions:
+                price = 0.0
+                if not context.current_data.empty:
+                    row = context.current_data[context.current_data["code"] == code]
+                    if not row.empty:
+                        price = row["close"].iloc[0]
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.BUY,
+                    side=OrderSide.BUY,
                     weight=weight,
                     reason=f"RSRS={rsrs_val:.2f} R²有效",
                 ))
-                self._entry_prices[code] = context.get_current_prices().get(code, 0)
+                self._entry_prices[code] = price
         
         return signals
     
     def _generate_exit_signals(self, context: StrategyContext) -> List[Signal]:
         """离场信号"""
         signals = []
-        
+
         rsrs = context.get_factor("rsrs_adaptive")
-        current_prices = context.get_current_prices()
-        
-        for code, pos in context.get_positions().items():
+
+        current_prices = {}
+        if not context.current_data.empty and "code" in context.current_data.columns:
+            current_prices = dict(zip(
+                context.current_data["code"],
+                context.current_data["close"]
+            ))
+
+        for code, pos in context.positions.items():
             price = current_prices.get(code)
             if not price:
                 continue
-            
+
             rsrs_val = rsrs.get(code) if rsrs else 0
-            
+
             # RSRS转弱
             if rsrs_val < self.exit_threshold:
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.SELL,
+                    side=OrderSide.SELL,
                     weight=0.0,
                     reason=f"RSRS转弱{rsrs_val:.2f}",
                 ))
                 continue
-            
+
             # 计算盈亏
             entry = self._entry_prices.get(code, pos.entry_price)
             pnl = (price - entry) / entry
-            
+
             # 动态止损
             if pnl < -0.05:
                 signals.append(Signal(
                     code=code,
-                    direction=OrderSide.SELL,
+                    side=OrderSide.SELL,
                     weight=0.0,
                     reason=f"止损{pnl*100:.1f}%",
                 ))
