@@ -45,8 +45,11 @@ def test_rsrs_nan_fix():
 
     # 计算RSRS因子
     print("\n计算RSRS因子...")
+    # ✅ FIX: 使用合理的zscore_window，确保能计算出足够的rsrs_adaptive值
+    # 对于90天的数据，使用20-30的zscore_window更合适
+    zscore_window = min(30, n_days)
     rsrs_beta, rsrs_r2, rsrs_std, rsrs_adaptive, rsrs_valid, rsrs_momentum = compute_rsrs_batch(
-        high, low, window=18, zscore_window=600
+        high, low, window=18, zscore_window=zscore_window
     )
 
     # 统计结果
